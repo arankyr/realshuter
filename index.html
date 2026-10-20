@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Gyro Shooter v2.0</title>
+<title>Gyro Shooter v2.1</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -69,7 +69,7 @@
 
 <div id="menu" class="screen">
   <h1>GYRO <span>SHOOTER</span></h1>
-  <div style="opacity:.6;font-weight:700">v2.0</div>
+  <div style="opacity:.6;font-weight:700">v2.1</div>
   <p class="sub">Shooter en tercera persona. La PC muestra el juego y el celular es el arma: el arma copia cómo movés el celu.</p>
   <div class="row">
     <button class="primary" id="btnPC">🖥️ Soy la PC (pantalla)</button>
@@ -111,7 +111,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-const VERSION = 'v2.0 · tercera persona';
+const VERSION = 'v2.1 · 3 cámaras';
 const PREFIX = 'gyroshooter-v1-';
 $('ver').textContent = 'Gyro Shooter ' + VERSION;
 let isPhone = false;
@@ -130,7 +130,7 @@ if (params.get('join')) showJoin(params.get('join'));
 let peer = null, conn = null;
 let inputMode = 'none';            // 'phone' | 'mouse'
 let state = 'lobby';               // lobby | ready | play | over
-let camMode = 'tps';               // tps (detrás) | top (arriba)
+let camMode = 'tps';               // tps (detrás) | fps (primera persona) | top (arriba)
 
 function startPC() {
   $('menu').classList.add('hidden');
@@ -220,10 +220,13 @@ function calibrate() {
   ctrl.yawRef = ctrl.yawAcc - aimYaw / ctrl.sens;   // mantiene hacia donde mira el personaje
   ctrl.pitchRef = ctrl.pitch; ctrl.rollRef = ctrl.roll;
 }
+const CAM_NAMES = { tps: 'detrás', fps: 'primera persona', top: 'arriba' };
 function toggleCam() {
-  camMode = camMode === 'tps' ? 'top' : 'tps';
-  $('camInfo').textContent = 'cámara: ' + (camMode === 'tps' ? 'detrás' : 'arriba');
-  scene.fog.near = camMode === 'tps' ? 30 : 55; scene.fog.far = camMode === 'tps' ? 110 : 150;
+  camMode = camMode === 'tps' ? 'fps' : camMode === 'fps' ? 'top' : 'tps';
+  $('camInfo').textContent = 'cámara: ' + CAM_NAMES[camMode];
+  scene.fog.near = camMode === 'top' ? 55 : 30; scene.fog.far = camMode === 'top' ? 150 : 110;
+  head.visible = camMode !== 'fps';            // en primera persona no vemos nuestra propia cabeza
+  if (camMode === 'fps') { fpsYaw = curYaw; fpsPitch = curPitch; }
 }
 function send(o) { if (conn && conn.open) { try { conn.send(o); } catch (_) {} } }
 let lastStateStr = '';
@@ -720,7 +723,7 @@ const clock = new THREE.Clock();
 const _gq = new THREE.Euler(0, 0, 0, 'YXZ');
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), camLookCur = new THREE.Vector3(0, 1.5, -10);
 const fwd = new THREE.Vector3(), right = new THREE.Vector3(), gripW = new THREE.Vector3();
-let lobbyYaw = 0;
+let lobbyYaw = 0, fpsYaw = 0, fpsPitch = 0;
 
 function update(dt) {
   time += dt;
@@ -750,7 +753,9 @@ function update(dt) {
   fwd.set(0, 0, -1).applyQuaternion(gunRoot.quaternion);
   right.set(Math.cos(bodyYaw), 0, -Math.sin(bodyYaw));
   const hold = guns[curW].userData.hold;
-  gunRoot.position.set(0, 1.45 - dip, 0).addScaledVector(fwd, hold - kickBack).addScaledVector(right, .12);
+  // en primera persona el arma se levanta un poco para que entre en cuadro
+  const fp = camMode === 'fps';
+  gunRoot.position.set(0, (fp ? 1.56 : 1.45) - dip, 0).addScaledVector(fwd, hold + (fp ? .15 : 0) - kickBack).addScaledVector(right, fp ? .17 : .12);
 
   // ---- brazos: hombro → empuñadura ----
   gunRoot.updateMatrixWorld(true); hero.updateMatrixWorld(true);
@@ -787,12 +792,21 @@ function update(dt) {
     // atrás y arriba, corrida sobre el hombro derecho
     camPos.set(sx * 4.6 + cz * 1.0, 2.6, cz * 4.6 - sx * 1.0);
     camLook.set(-sx * 10, 1.5 + clamp(curPitch, -.6, .8) * 4, -cz * 10);
-  } else {
+  } else if (camMode === 'top') {
     camPos.set(0, 34, 26); camLook.set(0, 0, -2);
   }
-  camera.position.lerp(camPos, 1 - Math.exp(-dt * 6));
-  camLookCur.lerp(camLook, 1 - Math.exp(-dt * 6));
-  camera.lookAt(camLookCur);
+  if (camMode === 'fps') {
+    // ojos del soldado; la vista sigue al arma con un poquito de retraso, así se ve el arma moverse en 3D
+    const kf = 1 - Math.exp(-dt * 9);
+    fpsYaw += (curYaw - fpsYaw) * kf; fpsPitch += (clamp(curPitch, -1.2, 1.2) - fpsPitch) * kf;
+    camera.position.set(-Math.sin(bodyYaw) * .12, 1.78, -Math.cos(bodyYaw) * .12);
+    camera.rotation.set(fpsPitch, fpsYaw, 0, 'YXZ');
+    camLookCur.copy(camera.position).add(tmpV.set(0, 0, -10).applyEuler(camera.rotation));
+  } else {
+    camera.position.lerp(camPos, 1 - Math.exp(-dt * 6));
+    camLookCur.lerp(camLook, 1 - Math.exp(-dt * 6));
+    camera.lookAt(camLookCur);
+  }
   if (shake > .001) { camera.rotation.x += rand(-shake, shake) * .05; camera.rotation.y += rand(-shake, shake) * .05; }
 
   // ---- juego ----
