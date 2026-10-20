@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Gyro Shooter</title>
+<title>Gyro Shooter v2.0</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -49,10 +49,12 @@
   #fire.on{background:radial-gradient(circle,#ffd166,#e4572e);transform:scale(.98)}
   #joinCode{font-size:40px;width:220px;text-align:center;letter-spacing:10px;padding:10px;border-radius:14px;border:2px solid #2b3442;background:#0b0e13;color:#ffd166;font-weight:900}
   #joinMsg{color:#ffd166;min-height:22px;max-width:340px}
+  #ver{position:fixed;left:10px;bottom:6px;font-size:12px;opacity:.6;z-index:30;pointer-events:none;font-weight:700}
 </style>
 </head>
 <body>
 
+<div id="ver"></div>
 <canvas id="game"></canvas>
 <canvas id="ov"></canvas>
 
@@ -67,6 +69,7 @@
 
 <div id="menu" class="screen">
   <h1>GYRO <span>SHOOTER</span></h1>
+  <div style="opacity:.6;font-weight:700">v2.0</div>
   <p class="sub">Shooter en tercera persona. La PC muestra el juego y el celular es el arma: el arma copia cómo movés el celu.</p>
   <div class="row">
     <button class="primary" id="btnPC">🖥️ Soy la PC (pantalla)</button>
@@ -108,7 +111,9 @@
 <script>
 const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
+const VERSION = 'v2.0 · tercera persona';
 const PREFIX = 'gyroshooter-v1-';
+$('ver').textContent = 'Gyro Shooter ' + VERSION;
 let isPhone = false;
 const D2R = Math.PI / 180;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
